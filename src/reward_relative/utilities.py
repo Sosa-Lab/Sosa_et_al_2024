@@ -68,7 +68,7 @@ def make_date_string():
 
 def write_source_csv(data, fig):
     """ Write pandas dataframe to csv for figure source data """
-    from reward_relative.path_dict_firebird import path_dictionary as path_dict
+    from reward_relative.path_dict_seahorse import path_dictionary as path_dict
     filepath = os.path.join(path_dict['preprocessed_root'],
                              'source_data',
                              f'Fig{fig}.csv')

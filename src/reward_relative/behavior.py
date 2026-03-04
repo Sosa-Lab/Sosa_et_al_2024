@@ -658,14 +658,14 @@ def smooth_raster(x, mat, ax=None, smooth=False, sig=2, vals=None, cmap=None, co
 
         if vals is not None:
             ax.fill_between(x, mat[ind, :] + i, y2=i,
-                            color=cm(np.float(vals[ind])), linewidth=.001)
+                            color=cm(np.float64(vals[ind])), linewidth=.001)
         else:
             ax.fill_between(x, mat[ind, :] + i, y2=i,
                             color=color, linewidth=.001)
 
         if tports is not None:
             ax.scatter(tports[ind], i + .5,
-                       color=cm(np.float(vals[ind])), marker='x', s=50)
+                       color=cm(np.float64(vals[ind])), marker='x', s=50)
 
     ax.set_yticks(np.arange(0, mat.shape[0]+10, 10))
     ax.set_yticklabels([("%d" % i)
