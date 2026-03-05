@@ -52,7 +52,7 @@ import seaborn as sns
 ```
 
 ```python
-from reward_relative.path_dict_firebird import path_dictionary as path_dict
+from reward_relative.path_dict_seahorse import path_dictionary as path_dict
 fig_dir = ut.make_fig_dir(path_dict)
 pt.set_fig_params(fontsize=12)
 ```

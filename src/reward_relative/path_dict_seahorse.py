@@ -2,7 +2,7 @@
 Path dictionary for msosa on computer 'firebird'.
 
 Example usage in a jupyter notebook:
-` from reward_relative.path_dict_firebird import path_dictionary as path dict `
+` from reward_relative.path_dict_seahorse import path_dictionary as path dict `
 
 '''
 

@@ -52,7 +52,7 @@ from reward_relative import teleport_metadata
 ```
 
 ```python
-from reward_relative.path_dict_firebird import path_dictionary as path_dict
+from reward_relative.path_dict_seahorse import path_dictionary as path_dict
 ```
 
 ```python

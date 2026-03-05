@@ -130,7 +130,7 @@ def load_sess_pickle(basedir, animal, day=None, exp_day=None):
 def quick_load_multi_anim_sess(day, experiment='MetaLearn', anim_list=None, params=None):
     """ Quickly load pre-saved, processed data, assuming some file paths exist """
     from reward_relative import dayData as dd
-    from reward_relative.path_dict_firebird import path_dictionary as path_dict
+    from reward_relative.path_dict_seahorse import path_dictionary as path_dict
     
     if anim_list is None:
         anim_list = dd.define_anim_list(experiment, day, 'combined')

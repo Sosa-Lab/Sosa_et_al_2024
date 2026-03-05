@@ -45,7 +45,7 @@ from matplotlib import pyplot as plt
 ```python
 # Change this to your path dict file
 # If you don't have a path dict file, see reward_relative.path_dict_example and create one
-from reward_relative.path_dict_firebird import path_dictionary as path_dict
+from reward_relative.path_dict_seahorse import path_dictionary as path_dict
 ```
 
 ```python

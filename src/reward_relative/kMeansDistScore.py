@@ -1,5 +1,5 @@
 import sys
-sys.path.append("/home/mari/local_repos/lvl")
+sys.path.append("/home/sosalab/local_repos/lvl")
 # uses Alex William's lvl repo: https://github.com/ahwillia/lvl
 
 from lvl.factor_models import KMeans as lvl_kmeans

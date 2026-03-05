@@ -73,7 +73,7 @@ def find_common_rois(anim_list, day_list):
     To-do: add path_dict as input
     """
     try:
-        from reward_relative.path_dict_firebird import path_dictionary as path_dict
+        from reward_relative.path_dict_seahorse import path_dictionary as path_dict
     except:
         raise NotImplementedError("Path dict not found: you must define your own path dict")
     

@@ -71,12 +71,12 @@ import keras
 
 ```python
 import sys
-sys.path.append("/home/mari/local_repos/2p_repos/GLM_Tensorflow_2/code")
+sys.path.append("/home/sosalab/local_repos/GLM_Tensorflow_2/code")
 import glm_class as glm
 ```
 
 ```python
-from reward_relative.path_dict_firebird import path_dictionary as path_dict
+from reward_relative.path_dict_seahorse import path_dictionary as path_dict
 # options: path_dict_josquin, path_dict_msosamac, path_dict_msosaexternal
 ```
 

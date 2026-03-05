@@ -48,7 +48,7 @@ import TwoPUtils
 Copy and rename `path_dict.py` to a new file and edit it with the paths on your system.
 
 ```python
-from reward_relative.path_dict_firebird import path_dictionary as path_dict
+from reward_relative.path_dict_seahorse import path_dictionary as path_dict
 path_dict
 ```
 
