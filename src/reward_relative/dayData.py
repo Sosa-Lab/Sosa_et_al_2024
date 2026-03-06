@@ -101,7 +101,6 @@ def define_block_by(experiment, exp_day, an):
 
     return def_block_by
 
-
 def load_multi_anim_sess(path_dict, exp_day, an_list,
                          params={'speed': '2',
                                  'nperms': 100,
@@ -136,6 +135,42 @@ def load_multi_anim_sess(path_dict, exp_day, an_list,
         multi_an_sess = dill.load(open(pkl_path, "rb"))
 
     return multi_an_sess
+
+#2024 version with hardcoded dir structure: <root>/toShare/cleaned_w_F
+# def load_multi_anim_sess(path_dict, exp_day, an_list,
+#                          params={'speed': '2',
+#                                  'nperms': 100,
+#                                  'baseline_method': 'maximin',
+#                                  'ts_key': 'events'
+#                                  }
+#                          ):
+
+#     multi_an_sess = {}
+#     an_tag = ut.make_anim_tag(an_list)
+
+#     # load from previously saved multi_an pickle
+#     try:
+#         pkl_path = os.path.join(path_dict['preprocessed_root'], 'toShare', 'cleaned_w_F',
+#                                 ('%s_expday%d_speed%s_perms%d_%s_%s.pickle' % (
+#                                     an_tag, exp_day, params['speed'],
+#                                     params['nperms'], params['baseline_method'],
+#                                     params['ts_key']
+#                                 )))
+
+#         print(pkl_path)
+#         multi_an_sess = dill.load(open(pkl_path, "rb"))
+
+#     except:
+#         pkl_path = os.path.join(path_dict['preprocessed_root'], 'toShare', 'cleaned_w_F',
+#                                 ('%s_expday%d_speed%s_perms%d_%s.pickle' % (
+#                                     an_tag, exp_day, params['speed'],
+#                                     params['nperms'], params['baseline_method'],
+#                                 )))
+
+#         print(pkl_path)
+#         multi_an_sess = dill.load(open(pkl_path, "rb"))
+
+#     return multi_an_sess
 
 
 class dayData:
