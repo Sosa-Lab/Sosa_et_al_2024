@@ -116,16 +116,40 @@ class CircularRegression(BaseEstimator):
 def train_vs_test_blocks(X, y, train_data_idx, test_data_idx, model, n_repeats=10, train_pct=0.9, return_prediction=False):
     '''
     train and test: choose blocks of indices
+    X --> neural data
+    y --> behavioral data
+    train_data_idx --> array of indices to use from X and y.
+                      (looks like these are determined elsewhere
+                       to minimize bias of what )
     '''
     
     test_scores = []
     test_prediction = []
     test_actual = []
+
+    # must subselect out an array that can be evenly split by n_repeats:
+
+    remainder = len(test_data_idx )%n_repeats
+
+    # must subselect out an array that can be evenly split by n_repeats:
+    if remainder != 0:
+        removed_elements = test_data_idx[-remainder:]
+        test_data_idx = test_data_idx[:-remainder]
+
+        #remove elements trimmed out of train data from test data
+        # QUESTION --> is this the right strategy when doing x-day tests?
+        train_data_idx = np.setdiff1d(train_data_idx, removed_elements)
+
+
+
     test_folds = np.array_split(test_data_idx, n_repeats)
 
     for i in range(n_repeats):        
         # Get train and test indices
         test_idx = test_folds[i]
+
+        #note that if we dont trim test_idx as well, it will have a higher likelihood 
+        #of including the elements removed from 
         train_idx = np.random.choice(np.setdiff1d(train_data_idx, test_idx),
                                      replace=False, size=int(train_data_idx.size * train_pct))
 #         assert(np.round(train_idx.size / (train_pct*n_repeats), -1) == np.round(test_idx.size, -1))
@@ -136,14 +160,21 @@ def train_vs_test_blocks(X, y, train_data_idx, test_data_idx, model, n_repeats=1
         # Predict
         if return_prediction:
             y_pred = model.predict(X[test_idx])
-            test_prediction.append(y_pred)
+            # test_prediction.append(y_pred)
+            test_prediction += [y_pred]
             y_actual = y[test_idx]
-            test_actual.append(y_actual)
-
+            # test_actual.append(y_actual)
+            test_actual += [y_actual]
         # Compute test error
-        test_scores.append(model.score(X[test_idx], y[test_idx]))
+        # test_scores.append(model.score(X[test_idx], y[test_idx]))
+        test_scores+= [model.score(X[test_idx], y[test_idx])]
+
+    test_score_arr = np.asarray(test_scores)
     
+    test_prediction_arr = np.array(test_prediction)
+    test_actual_arr = np.array(test_actual)
+
     if return_prediction:
-        return np.asarray(test_scores), np.array(test_prediction), np.array(test_actual)
+        return test_score_arr, test_prediction_arr, test_actual_arr
     else:
-        return np.asarray(test_scores)
+        return test_score_arr

@@ -106,33 +106,61 @@ def load_multi_anim_sess(path_dict, exp_day, an_list,
                                  'nperms': 100,
                                  'baseline_method': 'maximin',
                                  'ts_key': 'events'
-                                 }
+                                 },
+                        
+                        param_order = ['baseline_method', 'ts_key'],
+                        subdirs = []
                          ):
 
+    '''
+    path_dict --> Dict containing at least {'preprocessed_root':<root directory>}
+    params    --> Dict containing params that are reflected in the filename. params besides speed, nperms, expday
+                  are expected to be in order they were appended to the filename, or param_order can be passed
+                  to correctly order the filename
+    param_order--> List with the order of which params are added to the filename
+    subdirs    --> List of subdirectories to append to the root path, in order, eg (<root>/subdirs[0]/subdirs[1])
+    '''
+
     multi_an_sess = {}
+
+    #eg an_list [GCAMP2, GCAMP4] -> "2-4"
     an_tag = ut.make_anim_tag(an_list)
 
     # load from previously saved multi_an pickle
-    try:
-        pkl_path = os.path.join(path_dict['preprocessed_root'], 'toShare', 'cleaned_w_F',
-                                ('%s_expday%d_speed%s_perms%d_%s_%s.pickle' % (
-                                    an_tag, exp_day, params['speed'],
-                                    params['nperms'], params['baseline_method'],
-                                    params['ts_key']
-                                )))
+    
+    #fstring for readability
+    filename = f"{an_tag}_expday{exp_day}_speed{params['speed']}_perms{params['nperms']}"
+    
+    #dictionaries are ordered in python > 3.7
+    #so we will assume params are added to the param dict in the order to be appended to the file name
+    #and we will ignore the explicitly labeled params ['speed', 'nperms', 'expday']
+    #Alternatively, the user can explicitly pass the param_order. this list comprehension
+    #only looks for params keys not found in the current param_order
+    param_order += [key for key in params.keys() if not key in param_order+['speed', 'nperms']]
 
-        print(pkl_path)
-        multi_an_sess = dill.load(open(pkl_path, "rb"))
+    for param in param_order:
+        filename += f'_{params[param]}'
+    
+    fullfilename = filename+'.pickle'
+    
+    #add any additional subdirs to the root, if necessary
+    directory_path = os.path.join(path_dict['preprocessed_root'], *subdirs)
 
-    except:
-        pkl_path = os.path.join(path_dict['preprocessed_root'], 'toShare', 'cleaned_w_F',
-                                ('%s_expday%d_speed%s_perms%d_%s.pickle' % (
-                                    an_tag, exp_day, params['speed'],
-                                    params['nperms'], params['baseline_method'],
-                                )))
+    pkl_path = os.path.join(directory_path, fullfilename)
 
-        print(pkl_path)
-        multi_an_sess = dill.load(open(pkl_path, "rb"))
+    if not os.path.isfile(pkl_path):
+        print(f'counstructed filepath is not a valid file:\n{pkl_path}')
+        print(f'\nremoving "events"')
+        filename = filename.replace('_events', '')
+        
+        
+        fullfilename = filename+'.pickle'
+        pkl_path = os.path.join(directory_path, fullfilename)
+
+        if not os.path.isfile(pkl_path):
+            raise FileExistsError(f'cannot find pickle file:\n{pkl_path}')
+    
+    multi_an_sess = dill.load(open(pkl_path, "rb"))
 
     return multi_an_sess
 
@@ -1597,8 +1625,10 @@ def plot_rew_rel_hist_across_an(multiDayData,
     from matplotlib import pyplot as plt
     from matplotlib.ticker import MaxNLocator
     from . import plotUtils as pt
-    from pycircstat import tests as circ_tests
-    from pycircstat.descriptive import median as circ_median
+    # from pycircstat2 import tests as circ_tests
+    # from pycircstat2.descriptive as cdesc
+    import pycircstat2.descriptive as circ_descriptive
+    import pycircstat2.hypothesis as circ_hypothesis
 
     exp_days = multiDayData.keys()
     if len(exp_days) == 1:
@@ -1746,12 +1776,22 @@ def plot_rew_rel_hist_across_an(multiDayData,
         hist_unity, _ = np.histogram(use_dist_along_unity,
                                      bins=bin_edges)
 
+        
+        cmean = circ_descriptive.circ_mean(use_dist_along_unity)
+        test_result = circ_hypothesis.one_sample_test(angle = 0, 
+                                                      alpha = use_dist_along_unity)
+        cmean_lo, cmean_hi = test_result.ci
+        cmean_H = test_result.reject
+
+        """
+        pycircstat1
+
         cmean = circ_tests.mtest(use_dist_along_unity, 0)[1]
         # lower and upper CI
         cmean_lo = circ_tests.mtest(use_dist_along_unity, 0)[-1][0]
         cmean_hi = circ_tests.mtest(use_dist_along_unity, 0)[-1][1]
         # med_pval = circ_tests.medtest(use_dist_along_unity, 0)[0]
-        cmean_H = circ_tests.mtest(use_dist_along_unity, 0)[0]
+        cmean_H = circ_tests.mtest(use_dist_along_unity, 0)[0]"""
         # normalize to place cells included in the scatter
         hist_unity = hist_unity/len(use_rel_dist)
 
@@ -1773,7 +1813,7 @@ def plot_rew_rel_hist_across_an(multiDayData,
             cmean,
             cmean_lo,
             cmean_hi,
-            cmean_H[0])                   
+            cmean_H)                   
         )
 
         ax1[d_i, 1].set_xlabel('dist from joint peak to reward (rad)')
