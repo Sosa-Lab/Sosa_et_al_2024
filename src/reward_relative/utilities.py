@@ -689,7 +689,7 @@ def compute_MSE_from_matrix(X, axis=0):
     #model output mean squared error
     sse = np.sum((np.nanmean(X,axis=axis)-X)**2)
     # divide by product of the number of points in each dimension
-    mse = (1 / np.product(X.shape)) * sse
+    mse = (1 / np.prod(X.shape)) * sse
     return mse
 
 def compute_SSE_from_matrix(X, axis=0):

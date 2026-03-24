@@ -303,7 +303,7 @@ def create_design_matrix(animal,
     # Set width of the position bases as 4 times spacing
     width_to_spacing_ratio = 4
     pos_width = width_to_spacing_ratio * \
-        sp.stats.mode(np.diff(pos_centers))[0][0]
+        sp.stats.mode(np.diff(pos_centers))[0]
 
     # Evaluate the values of the position series on each base
     # Note: the number of datapoints here is arbitrary; it just has to be of enough resolution when we visualize the basis functions
@@ -333,7 +333,7 @@ def create_design_matrix(animal,
     # Set width of the position bases as 4 times spacing
     width_to_spacing_ratio = 4
     relpos_width = width_to_spacing_ratio * \
-        sp.stats.mode(np.diff(relpos_centers))[0][0]
+        sp.stats.mode(np.diff(relpos_centers))[0]
 
     # Same for relative positions
     relpositions = np.linspace(start_relpos, end_relpos, 500)
