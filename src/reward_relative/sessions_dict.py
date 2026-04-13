@@ -202,6 +202,21 @@ single_plane = {
                 {'date': '06_04_2024', 'scene': 'Env2_LocationC', 'session': 2, 'scan': 2, 'exp_day': 13},
                 {'date': '07_04_2024', 'scene': 'Env2_LocationC_to_A', 'session': 1, 'scan': 2, 'exp_day': 14},
                ),
+    '5433_03': ({'date': '08_12_2024', 'scene': 'RunningTraining_scan', 'session': 1, 'scan': 12, 'exp_day': 0, 'GD': -9},
+                {'date': '09_12_2024', 'scene': 'Env1_LocationA', 'session': 1, 'scan': 2, 'exp_day': 1, 'GD': -8},
+                {'date': '10_12_2024', 'scene': 'Env1_LocationA', 'session': 2, 'scan': 10, 'exp_day': 2, 'GD': -7},
+                {'date': '11_12_2024', 'scene': 'Env1_LocationA_to_C', 'session': 1, 'scan': 2, 'exp_day': 3, 'GD': -6, 'change_reward_trial': 30},
+                {'date': '12_12_2024', 'scene': 'Env1_LocationC', 'session': 2, 'scan': 5, 'exp_day': 4, 'GD': -5},
+                {'date': '13_12_2024', 'scene': 'Env1_LocationC_to_B', 'session': 1, 'scan': 11, 'exp_day': 5, 'GD': -4, 'change_reward_trial': 30},
+                {'date': '20_12_2024', 'scene': 'Env1_LocationB', 'session': 2, 'scan': 6, 'exp_day': 6, 'GD': 3},
+                {'date': '22_12_2024', 'scene': 'Env1_LocationB_to_A', 'session': 2, 'scan': 12, 'exp_day': 7, 'GD': 5, 'change_reward_trial': 15},
+                {'date': '23_12_2024', 'scene': 'Env1_LocationA', 'session': 2, 'scan': 9, 'exp_day': 8, 'GD': 6}, #exp day 7.5 in notes
+                {'date': '24_12_2024', 'scene': 'Env1_A_to_Env2_B', 'session': 3, 'scan': 19, 'exp_day': 9, 'GD': 7, 'change_reward_trial': 20}, #exp day 8 in notes
+                {'date': '30_12_2024', 'scene': 'Env2_LocationB', 'session': 1, 'scan': 2, 'exp_day': 10, 'GD': 13}, #exp day 9 in notes
+                {'date': '31_12_2024', 'scene': 'Env2_LocationB_to_C', 'session': 3, 'scan': 5, 'exp_day': 11, 'GD': 14, 'change_reward_trial': 20}, #exp day 10 in notes
+                
+
+                  ),
     
 }
 
@@ -240,6 +255,7 @@ multi_plane = {
                 {'date': '06_04_2024', 'scene': 'Env1_LocationA', 'session': 2, 'scan': 5, 'exp_day': 13},
                 {'date': '07_04_2024', 'scene': 'Env1_LocationA_to_C', 'session': 4, 'scan': 14, 'exp_day': 14},
                ),
+
 
 
 }
