@@ -1208,7 +1208,7 @@ def calc_place_cells(
         warnings.simplefilter("ignore", category=RuntimeWarning)
         if trial_subsets:
             print("calculating trial subsets...")
-            trial_dict = behav.define_trial_subsets(sess, force_two_sets=True)
+            trial_dict = behavior.define_trial_subsets(sess, force_two_sets=True)
             trial_set0 = trial_dict["trial_set0"]
             trial_set1 = trial_dict["trial_set1"]
 
