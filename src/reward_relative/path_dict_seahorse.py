@@ -17,7 +17,7 @@ HOME = os.path.expanduser("~")
 DATA_ROOT = os.path.join("/data","2p_data")  # parent path to data
 PP_ROOT = DATA_ROOT # path to preprocessed data
 # /media/sosalab/T7/2p_raw_data
-SBX_ROOT = os.path.join("/media","sosalab","T7","2p_raw_data") # scanbox data path, if different from preprocessed data path
+SBX_ROOT = os.path.join("/media","sosalab","T71","2p_raw_data") # scanbox data path, if different from preprocessed data path
 GDRIVE_ROOT = os.path.join("/mnt","gdrive","2P_Data") # alternate raw data path - MetaLearn_GDrive: mounted via rclone
 
 # GIT_ROOT = os.path.join(HOME,"local_repos","2p_repos")
