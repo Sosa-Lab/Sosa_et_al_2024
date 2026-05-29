@@ -1012,7 +1012,7 @@ def antic_consum_licks(sess):
     reward_mask = sess.vr_data['reward']._values > 0
     reward_start = np.argwhere(reward_mask).ravel() - 1
     reward_end = (
-        reward_start + int(2 * sess.scan_info['frame_rate'])).astype(np.int)
+        reward_start + int(2 * sess.scan_info['frame_rate'])).astype(int)
 
     consum_mask = np.zeros(reward_mask.shape) > 0
     for (start, end) in zip(reward_start, reward_end):
