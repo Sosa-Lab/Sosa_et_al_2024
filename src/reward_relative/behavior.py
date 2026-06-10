@@ -506,9 +506,10 @@ def plot_norm_lick_raster(sess,
         norm_licks = norm_licks[np.argsort(sort_by, kind='stable')]
         isreward = isreward[np.argsort(sort_by, kind='stable')]
         morph = morph[np.argsort(sort_by, kind='stable')]
+        rzone_labels = rzone_labels[np.argsort(sort_by, kind='stable')]
         plot_reward_zone(rz[np.argsort(sort_by, kind='stable')],
                          ax, plottype='area', morph=morph,rzone_labels=rzone_labels)
-    else:
+    else: 
         plot_reward_zone(rz, ax, plottype='area', morph=morph,  rzone_labels=rzone_labels)
 
 
