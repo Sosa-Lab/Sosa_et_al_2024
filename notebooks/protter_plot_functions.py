@@ -264,7 +264,7 @@ class View:
     
     def _convert_sort_dict(self, sort_dict):
         new_dict = {}
-        for k, v in sort_dict:
+        for k, v in sort_dict.items():
             if v == 'descending':
                 new_v = False
             elif v == 'ascending':
@@ -367,8 +367,7 @@ class LickRasterView(View):
         self.licks = licks
         self.bins = bins
         self.smooth_sigma = 0.5
-        # self.plot_step = np.percentile(self.licks.ravel()[self.licks>0.1], 99)*1.1 << in case i decide to change
-        self.sel = []                                                                               per animal
+        # self.plot_step = np.percentile(self.licks.ravel()[self.licks>0.1], 99)*1.1 << in case i decide to change per animal                                                                            
         self.plot_step = 2.75
         self.ax = ax
         self.set_raster_colormap()
@@ -394,7 +393,7 @@ class LickRasterView(View):
         
         # take in ids (meta['idx']), but call plot_raster with index for
         # lick data passed in
-        self.sel = ids
+        self.id_selection = ids
         self.plot_raster(self.ids_to_positions(ids))
 
     def plot_raster(self, pos_ind):
