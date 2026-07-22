@@ -5,6 +5,8 @@ from matplotlib import pyplot as plt
 import math
 import pandas as pd
 import warnings
+import os
+import sqlite3 as sql
 
 import TwoPUtils
 
@@ -34,17 +36,59 @@ env_morph_dict = {'Env1': 0,
                   'Env3': 0.5}
 
 
+def load_sqlite(fpath, downcast = True):
+    conn = sql.connect(fpath)
+    df = pd.read_sql("SELECT * FROM data", conn)
+    conn.close()
+    if downcast:
+
+
+
+
+        # downcast integers
+        int_cols = df.select_dtypes(include='integer').columns
+        df[int_cols] = df[int_cols].apply(pd.to_numeric, downcast='integer')
+
+        # downcast floats
+        float_cols = df.select_dtypes(include='float').columns
+        df[float_cols] = df[float_cols].apply(pd.to_numeric, downcast='float')
+
+    return df
+
+def get_sqlite_fpath(sess):
+    return os.path.join(sess.vr_filename)
+
+
+def get_reward_zones_from_sqlite_file(fpath,
+                                 reward_zone_center_col = 'currrewardcenter',
+                                 reward_zone_width = 50):
+    ''' Get reward zone positions and labels for a given session based on sqlite file.
+    :param sess: session class
+
+    :return: rz_coords: 2 x N array of zone [start, stop] positions by N trials
+             rz_labels: 1 x N array of task-relevant zone label (i.e. 'A') by N trials'''
+
+
+    df = load_sqlite(fpath)
+
+    trials = df.drop_duplicates('trialnum')
+    rzone_centers = trials[reward_zone_center_col].values
+
+    rz_coords = np.repeat(rzone_centers[:,np.newaxis],2, axis = 1)
+
+    rz_coords[:,0] = rz_coords[:,0] - reward_zone_width / 2
+    rz_coords[:,1] = rz_coords[:,1] + reward_zone_width / 2
+
+
+    rz_labels = trials['currrewardzone']
+
+    return rz_coords, rz_labels.values
+
 def get_trial_types(sess):
     """
     :param sess: session class
-<<<<<<< Sosa
     :return: isreward, morph, - binary vectors indicating whether reward was delivered
         on each trial, whether the trial was env morph value 0 or 1
-=======
-    :return: isreward, morph, dream - binary vectors indicating whether reward was delivered
-        on each trial, whether the trial was morph 0 or 1, whether the trial was in Dreamland
-        or not.
->>>>>>> InVivoDA
     """
 
     isreward = np.empty((0, 1), int)
@@ -432,6 +476,7 @@ def plot_norm_lick_raster(sess,
                           correct_sensor_error=False, 
                           correction_thr=0.3,
                          rzone_labels=None,
+                         reward_zones=None, # option to input the reward zones starts and stops
                          compute_matrix_by_set=False,
                          ):
     """
@@ -491,15 +536,18 @@ def plot_norm_lick_raster(sess,
         morph = np.zeros(ntrials, )
 
     # find reward zone coordinates
-    if rzone_labels is not None:
+    if (rzone_labels is not None) & (reward_zones is None):
         if hasattr(sess, 'change_reward_trial'):
             rz, _ = get_reward_zones(sess, change_trial = sess.change_reward_trial)
             # change_trial = np.where(rzone_labels != rzone_labels[0])[0][0]
             # rz, _ = get_reward_zones(sess, change_trial=change_trial)
         else:
             rz, _ = get_reward_zones(sess)  
-    else:
+    elif (rzone_labels is None) & (reward_zones is None):
         rz, rzone_labels = get_reward_zones(sess)
+
+    if reward_zones is not None:
+        rz = reward_zones
 
     # optional sort by omission trials
     if sort_by is not None:
@@ -537,7 +585,7 @@ def plot_norm_lick_raster(sess,
 
 
 def plot_norm_speed_raster(sess, ax=None, sort_by=None, isreward=None, morph=None, cmap=None,
-                           impute_NaNs=False, trial_subset=None, rzone_labels=None):
+                           impute_NaNs=False, trial_subset=None, rzone_labels=None, reward_zones=None):
     """
     plot speed mat ( ntrials x positions) as a smoothed histogram
 
@@ -583,15 +631,18 @@ def plot_norm_speed_raster(sess, ax=None, sort_by=None, isreward=None, morph=Non
         morph = np.zeros(ntrials, )
 
     # find reward zone coordinates
-    if rzone_labels is not None:
+    if (rzone_labels is not None) & (reward_zones is None):
         if hasattr(sess, 'change_reward_trial'):
             rz, _ = get_reward_zones(sess, change_trial = sess.change_reward_trial)
             # change_trial = np.where(rzone_labels != rzone_labels[0])[0][0]
             # rz, _ = get_reward_zones(sess, change_trial=change_trial)
         else:
             rz, _ = get_reward_zones(sess)  
-    else:
+    elif (rzone_labels is None) & (reward_zones is None):
         rz, rzone_labels = get_reward_zones(sess)
+
+    if reward_zones is not None:
+        rz = reward_zones
 
     # optional sort by omission trials
     if sort_by is not None:
@@ -690,13 +741,7 @@ def plot_reward_zone(reward_zone, ax=None, plottype=None,
     :param plottype: 'area' (default; for smoothed rasters) or 'line' (for imshow-style plots)
     :param morph0color: color of reward_zone shading on morph0 track (used as default)
     :param morph1color: color of reward_zone shading on morph1 track
-<<<<<<< Sosa
     :param morph: trials x 1 array of morph values, expected as binary 1s and 0s
-=======
-    :param dreamcolor: color of reward_zone shading on DreamLand track
-    :param morph: trials x 1 array of morph values, expected as binary 1s and 0s
-    :param dream: trials x 1 array of dream values, expected as binary 1s and 0s
->>>>>>> InVivoDA
     :return: ax - axis of plot object
     """
     if ax is None:
@@ -740,12 +785,20 @@ def plot_reward_zone(reward_zone, ax=None, plottype=None,
                                      rend, rend], color=morph1color)
             elif rzone_labels is not None:
                 rzL = rzone_labels[tstart]
-                if rzL == ['A']:
-                    color = morph0color
-                elif rzL == ['B']:
-                    color = (0.612, 0.486, 0.95, 1)
-                elif rzL == ['C']:
-                    color = morph1color
+                # if rzL == ['A']:
+                #     color = morph0color
+                # elif rzL == ['B']:
+                #     color = (0.612, 0.486, 0.95, 1)
+                # elif rzL == ['C']:
+                #     color = morph1color
+                if rzL == 'A':
+                    color = pt.hex_to_rgb_normalized('#FF3131')
+                elif rzL == 'B':
+                    color = pt.hex_to_rgb_normalized('#FF751F')
+                elif rzL == 'C':
+                    color = pt.hex_to_rgb_normalized('#7ED957')
+                elif rzL == 'D':
+                    color = pt.hex_to_rgb_normalized('#0CC0DF')
                 else:
                     #default
                     color=morph1color
