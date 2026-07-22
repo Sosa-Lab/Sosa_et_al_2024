@@ -34,11 +34,14 @@ def add_selectors(scatter, linker, meta, click_radius_px=5):
     def on_key_press(event):
         if event.key in ('shift', 'control', 'cmd', 'super'):
             mods.add(event.key)
+            
     def on_key_release(event):
         mods.discard(event.key)
     fig = ax.figure
     fig.canvas.mpl_connect('key_press_event', on_key_press)
     fig.canvas.mpl_connect('key_release_event', on_key_release)
+
+    
 
     def apply(positions):
         ids = positions_to_ids(list(map(int, positions)))

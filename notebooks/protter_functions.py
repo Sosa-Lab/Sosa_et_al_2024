@@ -64,6 +64,41 @@ class TrialInfo:
         self.lookup_df = dat[0]
         for dat_day in dat[1:]:
             self.lookup_df = pd.concat([self.lookup_df, dat_day] ) 
+    
+    def add_session(self, day, session):
+        rzones = behavior.get_reward_zones(session)[0]
+        omit_trials = ra.get_omission_trials(session)['trials']
+        omit = np.zeros(shape = (len(rzones)), dtype = bool)
+        omit[omit_trials] = True
+
+        start = self.lookup_df.idx.max()+1
+
+        idxs = np.arange(len(rzones), dtype = int)+start
+
+        if rzones[0,][0]<rzones[-1][0]:
+            type_swap = 'swap_distal'
+        elif rzones[0,0] == rzones[-1,0]:
+            type_swap = 'stay'
+        else:
+            type_swap = 'swap_proximal'
+
+        if 'swap' in type_swap:
+            trial_type = ['pre_swap']*sum(rzones[:,0]==rzones[0,0]) 
+            trial_type += ['post_swap']*sum(rzones[:,0]==rzones[-1,0])
+        else:
+            trial_type = ['stay']*len(rzones)
+
+
+        self.lookup_df = pd.concat([self.lookup_df, pd.DataFrame(data = {'idx' : idxs, 
+                                        'day' : [day]*len(rzones), 
+                                        'trial' :  np.arange(0, len(rzones), 1), 
+                                        'reward_zone_start': rzones[:,0], 
+                                        'reward_zone_end': rzones[:,1],
+                                        'trial_type':trial_type,
+                                        'swap_type':type_swap, 
+                                        'omit':omit} )])
+    
+
 
 
 
@@ -121,3 +156,11 @@ def generate_lick_metrics(session, correct_sensor_error = True, correction_thr=0
 
     com_vs_circvar[:,1] = astropy.stats.circstats.circvar(licks, axis = 1)
     return com_vs_circvar
+
+def correlate_two_pop_vectors(pv1, pv2, pv1_name, pv2_name):
+    '''take two pop vectors and their names, and return:
+    corr_matrices --> list
+    corr_names    --> list'''
+    corr_mat = np.corrcoef(pv1, pv2)
+
+    return [corr_mat[:450,:450],  corr_mat[450:, 450:], corr_mat[0:450, 450:],], [f'{pv1_name}', f'{pv2_name}', f'{pv1_name}_v_{pv2_name}']

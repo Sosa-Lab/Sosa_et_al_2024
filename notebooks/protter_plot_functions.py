@@ -1,5 +1,6 @@
 from matplotlib.widgets import RadioButtons
 from matplotlib.colors import Normalize, to_rgba
+from matplotlib.cm import ScalarMappable
 
 from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
@@ -145,7 +146,7 @@ def add_color_selector(scatter, meta, columns=None,
         fig.canvas.draw_idle()
 
     fig.subplots_adjust(left=0.28)                    # make room on the left
-    rax = fig.add_axes([0.02, 0.5, 0.1, 0.3])        # [left, bottom, w, h], fig coords
+    rax = fig.add_axes([0.1, 0.5, 0.1, 0.3])        # [left, bottom, w, h], fig coords
     rax.set_title('color by', fontsize=9)
     radio = RadioButtons(rax, columns)
     radio.on_clicked(recolor)
@@ -153,90 +154,230 @@ def add_color_selector(scatter, meta, columns=None,
     recolor(columns[0])
     return radio        # keep this reference alive — see note
 
+#clade made this, too. worked without any changes using default values. 
+def add_color_selector(scatter, meta, columns=None,
+                       cmap_continuous='viridis', cmap_categorical='tab10',
+                       after_recolor=None):
+    """Recolor a scatter by a chosen metadata column via on-figure radio buttons.
+    Assumes point order == meta row order (point i is row i)."""
+    ax  = scatter.axes
+    fig = ax.figure
+    columns = list(meta.columns) if columns is None else columns
+    state = {'cbar': None}
 
+    def set_positions_to_facecolor(plt_idx, color):
+        if isinstance(color, str):
+            color = to_rgba(color)
+        
+        cur_colors = scatter.get_facecolors()
+
+        if len(cur_colors) == 1 and len(meta)>1:
+            cur_colors = np.repeat(cur_colors, len(meta), axis = 0)
+
+        new_colors = cur_colors
+        print(plt_idx)
+        new_colors[plt_idx] = color
+        scatter.set_facecolors(new_colors)
+
+    def _clear_extras():
+        if state['cbar'] is not None:
+            state['cbar'].remove(); state['cbar'] = None
+        if ax.get_legend() is not None:
+            ax.get_legend().remove()
+
+    
+    def set_continuous_cmap(values, col):
+        v = np.asarray(values, float)
+        scatter.set_array(v)
+        scatter.set_cmap(cmap_continuous)
+        scatter.set_norm(Normalize(np.nanmin(v), np.nanmax(v)))
+        state['cbar'] = fig.colorbar(scatter,  ax=ax, label=col)
+    
+    def set_categorical_cmap(values, col):
+        codes, uniques = pd.factorize(values)
+        cmap = plt.get_cmap(cmap_categorical)
+        scatter.set_array(None)                   # detach the scalar mappable << what does this actually do?
+        scatter.set_facecolors(cmap(codes % cmap.N))
+        
+        handles = [Line2D([], [], marker='o', ls='', color=cmap(i % cmap.N),
+                        label=str(u)) for i, u in enumerate(uniques) if not u == -1]
+
+        if any(values == -1):
+            set_positions_to_facecolor(np.where(values == -1)[0], 'black')
+            handles = [Line2D([], [], marker='o', ls='', color='black',
+                        label=str(-1))] + handles
+
+        
+        
+        
+        ax.legend(handles=handles, title=col, fontsize=8,
+                loc='upper right', bbox_to_anchor=(-0.02, 1))
+
+    def guess_is_continuous(values):
+        numeric = (pd.api.types.is_numeric_dtype(values)
+                    and not pd.api.types.is_bool_dtype(values))
+        if not numeric:
+            return False
+        elif pd.api.types.is_integer_dtype(values) and len(np.unique(values)) / len(values) < 0.5:
+    
+            return False
+        else:
+            return True
+        
+    
+    
+    def recolor(col):
+        _clear_extras()
+        values = meta[col]
+
+        
+        continous = guess_is_continuous(values)
+        if continous:                                   # continuous -> colormap
+            set_continuous_cmap(values, col)
+        else:                                         # categorical/bool -> discrete
+            set_categorical_cmap(values, col)
+        if after_recolor:                                                            # << not implemented
+            after_recolor(col)                        # e.g. re-stamp selection alpha  << not implemented
+        fig.canvas.draw_idle()
+
+    fig.subplots_adjust(left=0.28)                    # make room on the left
+    rax = fig.add_axes([0.1, 0.5, 0.1, 0.3])        # [left, bottom, w, h], fig coords
+    rax.set_title('color by', fontsize=9)
+    radio = RadioButtons(rax, columns)
+    radio.on_clicked(recolor)
+
+    recolor(columns[0])
+    return radio        # keep this reference alive — see note
 
 from matplotlib.widgets import RectangleSelector, LassoSelector
 #
-def add_selectors(scatter, linker, meta, click_radius_px=5):
-    """Box-drag and point-click selection on `scatter`, wired into `linker`.
+class ColorSelector:
+    def __init__(self, scatter, meta, columns=None,
+                        cmap_continuous='viridis', cmap_categorical='tab10',
+                        after_recolor=None) -> None:
+        '''state-saving RadioSelector'''
 
-    Modifiers:  plain = replace, shift = add, ctrl/cmd = remove.
-    Empty plain click clears. Point order must match linker.metadata row order.
-    Returns the RectangleSelector — keep a reference to it (see note).
-    """
-    ax = scatter.axes
-    trial_idx_to_pos = {tid: i for i, tid in enumerate(meta['idx'].values)}
-
-    def ids_to_positions(ids):
-        """Global IDs -> local positions within this View. skip IDs not in this view"""
-        return np.array([trial_idx_to_pos[t] for t in ids if t in trial_idx_to_pos], dtype=int)
-
-    def positions_to_ids(positions):
-        """Local positions (e.g. from .contains) -> global IDs."""
-        return meta.iloc[np.asarray(positions, dtype=int)]['idx']
-
-    def points_in_box(x0, x1, y0, y1):
-        xy = scatter.get_offsets()                  # (N, 2), data coords
-        x, y = xy[:, 0], xy[:, 1]
-        inside = ((x >= min(x0, x1)) & (x <= max(x0, x1)) &
-                  (y >= min(y0, y1)) & (y <= max(y0, y1)))
-        return np.nonzero(inside)[0]
-
-    def apply(ids, key):
-        ids = positions_to_ids(list(map(int, ids)))
-
-
-
-        if key and 'shift' in key:
-            linker.add_selected(ids)
-        elif key and ('control' in key or 'cmd' in key or 'super' in key):
-            linker.remove_selected_ids(ids)
-        else:
-            linker.set_selected(ids)
-
-    def on_select(eclick, erelease):
-        key = eclick.key                            # modifier held during the gesture
-        dpx = np.hypot((erelease.x or 0) - (eclick.x or 0),
-                       (erelease.y or 0) - (eclick.y or 0))
-        if dpx < click_radius_px:                   # --- point click ---
-            hit, info = scatter.contains(eclick)
-            if hit:
-                apply(info['ind'], key)
-            elif not key:                           # click on empty space, no modifier
-                linker.clear()
-        else:                                       # --- box drag ---
-            apply(points_in_box(eclick.xdata, erelease.xdata,
-                                eclick.ydata, erelease.ydata), key)
-    def points_in_poly(verts):
-        if len(verts) < 3:                       # too small to enclose anything
-            return np.array([], dtype=int)
-        inside = Path(verts).contains_points(scatter.get_offsets())
-        return np.nonzero(inside)[0]
-
-    def on_lasso(verts):
-        apply()
-    
-    selector = RectangleSelector(
-        ax, on_select,
-        useblit=True, interactive=False, button=[1],          # left button only
-        spancoords='pixels', minspanx=0, minspany=0,          # 0 -> clicks still fire onselect
-        props=dict(facecolor='0.6', edgecolor='0.3', alpha=0.2, fill=True),
-        # free shift/ctrl from the selector's own square/center modes so we can use them:
-        state_modifier_keys=dict(square='9', center='0'),
-    )
-
-    selector2 = LassoSelector(
-        ax, on_select,
-        useblit=True,  button=[3],          # left button only
-                # 0 -> clicks still fire onselect
-        props=dict(color='0.3', alpha=0.2, ),
-        # free shift/ctrl from the selector's own square/center modes so we can use them:
-       )
-    
-    
+        self.scatter = scatter
+        self.meta = meta
+        self.color_linker = ColorLinker(column_name='omit')
+        
+        self.cmap_continuous='viridis'
+        self.cmap_categorical='tab10'
+        self.after_recolor=[]
+        
+        self.radio_obj = self.add_color_selector(scatter, meta, columns, cmap_continuous, cmap_categorical)
+        
         
 
-    return selector, selector2
+    def add_after_recolor_call(self, func):
+        '''add a new func to run after recoloring/button press'''
+        self.after_recolor += [func]
+
+    def get_color_linker(self):
+        return self.color_linker
+    
+    #clade made this, too. worked without any changes using default values. 
+    def add_color_selector(self, scatter, meta, columns=None,
+                        cmap_continuous='viridis', cmap_categorical='tab10',
+                        ):
+        """Recolor a scatter by a chosen metadata column via on-figure radio buttons.
+        Assumes point order == meta row order (point i is row i)."""
+        ax  = scatter.axes
+        fig = ax.figure
+        columns = list(meta.columns) if columns is None else columns
+        state = {'cbar': None}
+
+        def set_positions_to_facecolor(plt_idx, color):
+            if isinstance(color, str):
+                color = to_rgba(color)
+            
+            cur_colors = scatter.get_facecolors()
+
+            if len(cur_colors) == 1 and len(meta)>1:
+                cur_colors = np.repeat(cur_colors, len(meta), axis = 0)
+
+            new_colors = cur_colors
+            print(plt_idx)
+            new_colors[plt_idx] = color
+            scatter.set_facecolors(new_colors)
+
+        def _clear_extras():
+            if state['cbar'] is not None:
+                state['cbar'].remove(); state['cbar'] = None
+            if ax.get_legend() is not None:
+                ax.get_legend().remove()
+
+        
+        def set_continuous_cmap(values, col):
+            v = np.asarray(values, float)
+            scatter.set_array(v)
+            mappable = ScalarMappable(norm=Normalize(np.nanmin(v), np.nanmax(v)), cmap=cmap_continuous)
+            scatter.set_cmap(cmap_continuous) #just to track the name of the cmap
+            scatter.set_facecolors(mappable.to_rgba(v))
+            state['cbar'] = fig.colorbar(scatter,  ax=ax, label=col)
+            self.color_linker.set_continuous(mappable.to_rgba, col)
+            
+            
+        
+        def set_categorical_cmap(values, col):
+            codes, uniques = pd.factorize(values)
+            cmap = plt.get_cmap(cmap_categorical)
+            scatter.set_array(None)                   # detach the scalar mappable << what does this actually do?
+            scatter.set_facecolors(cmap(codes % cmap.N))
+            
+            categorical_cmap = {unique:cmap(i % cmap.N) for i, unique in enumerate(uniques)} #keep this to pass to other plot objects
+           
+
+            handles = [Line2D([], [], marker='o', ls='', color=cmap(i % cmap.N),
+                            label=str(u)) for i, u in enumerate(uniques) if not u == -1]
+
+            if any(values == -1):
+                categorical_cmap[-1] = (0, 0, 0, 1)
+                set_positions_to_facecolor(np.where(values == -1)[0], 'black')
+                handles = [Line2D([], [], marker='o', ls='', color='black',
+                            label=str(-1))] + handles
+
+            self.color_linker.set_categorical(categorical_cmap, col)
+
+            ax.legend(handles=handles, title=col, fontsize=8,
+                    loc='upper right', bbox_to_anchor=(-0.02, 1))
+
+        def guess_is_continuous(values):
+            numeric = (pd.api.types.is_numeric_dtype(values)
+                        and not pd.api.types.is_bool_dtype(values))
+            if not numeric:
+                return False
+            elif pd.api.types.is_integer_dtype(values) and len(np.unique(values)) / len(values) < 0.5:
+        
+                return False
+            else:
+                return True
+            
+        
+        
+        def recolor(col):
+            _clear_extras()
+            values = meta[col]
+
+            
+            continous = guess_is_continuous(values)
+            if continous:                                   # continuous -> colormap
+                set_continuous_cmap(values, col)
+            else:                                         # categorical/bool -> discrete
+                set_categorical_cmap(values, col)
+            for func in self.after_recolor:                                                            # << not implemented
+                func()                        # e.g. re-stamp selection alpha  << not implemented
+            fig.canvas.draw_idle()
+
+        fig.subplots_adjust(left=0.28)                    # make room on the left
+        rax = fig.add_axes([0.1, 0.5, 0.1, 0.3])        # [left, bottom, w, h], fig coords
+        rax.set_title('color by', fontsize=9)
+        radio = RadioButtons(rax, columns)
+        radio.on_clicked(recolor)
+
+        recolor(columns[0])
+        return radio        # keep this reference alive — see note
+
 
 class View:
     ''''''
@@ -255,7 +396,7 @@ class View:
         
 
     def ids_to_positions(self, ids):
-        """Global IDs -> local positions within this View. skip IDs not in this view"""
+        """Global IDs -> local array indices ("positions") within this View. skip IDs not in this view"""
         return np.array([self.trial_idx_to_pos[t] for t in ids if t in self.trial_idx_to_pos], dtype=int)
 
     def positions_to_ids(self, positions):
@@ -294,9 +435,9 @@ class View:
         self.id_selection = self.metadata.loc[self.metadata.idx.isin(self.id_selection), 'idx'].values
 
         #run the update func
-        self.update(self.id_selection, None, None, None)
+        self.update(self.id_selection)
     
-    def update(self, selected_ids, sel_meta, deselected, desel_meta):
+    def update(self, selected_ids,):
         '''to be overriden by view'''
 
 
@@ -311,20 +452,34 @@ class ScatterView(View):
         self.alpha_on_deselect = alpha_on_deselect
         self.meta = meta
         self.update_color = color_on_select
+        self.reveal = False #hold this flag to recolor deselected points temporarily
+        self._connect_reveal()
         
 
     #claude wrote, i reviewed and changed to utilize new trial_idx <-> pos system
-    def update(self, selected_ids, sel_meta, deselected, desel_meta):
-        """Selected points opaque, everything else faded."""
-        n = len(self.plt_obj.get_offsets())          # points actually drawn
-        alphas = np.full(n, self.alpha_on_deselect)  # default everyone faded
-        self.id_selection = np.asarray(selected_ids, dtype=int)
-        positions = self.ids_to_positions(self.id_selection)
-        alphas[positions] = self.alpha_on_select           # lift the selected
-        self.plt_obj.set_alpha(alphas)
-        if not self.update_color is None:
-            self.set_trial_ids_to_facecolor(self.id_selection, self.update_color)
-        self.plt_obj.figure.canvas.draw_idle()
+    # def update(self, selected_ids,):
+    #     """Selected points opaque, everything else faded."""
+    #     n = len(self.plt_obj.get_offsets())          # points actually drawn
+    #     alphas = np.full(n, self.alpha_on_deselect)  # default everyone faded
+    #     self.id_selection = np.asarray(selected_ids, dtype=int)
+    #     positions = self.ids_to_positions(self.id_selection)
+    #     alphas[positions] = self.alpha_on_select           # lift the selected
+    #     self.plt_obj.set_alpha(alphas)
+    #     if not self.update_color is None:
+    #         self.set_trial_ids_to_facecolor(self.id_selection, self.update_color)
+    #     self.plt_obj.figure.canvas.draw_idle()
+
+    def update(self, selected_ids):
+        """Store the current selection and draw it (respecting the reveal toggle)."""
+
+        if len(selected_ids) > 0:
+            self.id_selection = np.asarray(selected_ids, dtype=int)
+            self._render_alpha()
+            if self.update_color is not None:
+                self.set_trial_ids_to_facecolor(self.id_selection, self.update_color)
+            self.plt_obj.figure.canvas.draw_idle()
+        else:
+            print('uhh, empty list of IDs passed...')
 
     def set_trial_ids_to_facecolor(self, ids, color):
         if isinstance(color, str):
@@ -352,16 +507,46 @@ class ScatterView(View):
         plt_idx = self.ids_to_positions(ids)
         new_colors[plt_idx] = color
         self.plt_obj.set_edgecolors(new_colors)
+    
+    def _connect_reveal(self, keys=(' ', 'space')):
+        '''add a function to use the space bar to reveal all points'''
+        fig = self.plt_obj.figure
+
+        def on_key_release(event):
+            print('keypress')
+            if event.key in keys and self.reveal:
+                self.reveal = False
+                self._render_alpha(); fig.canvas.draw_idle()
+            elif event.key in keys:
+                self.reveal = True
+                self._render_alpha(); fig.canvas.draw_idle()
+            else:
+                print(f'{event.key}')
+
+        self._reveal_cid_release = fig.canvas.mpl_connect("key_release_event", on_key_release)
+        
+    def _render_alpha(self):
+        """Paint alpha from the stored selection. reveal=True lifts everyone to selected alpha."""
+        n = len(self.plt_obj.get_offsets())
+        if self.reveal:
+            alphas = np.full(n, self.alpha_on_select)      # all points visible for re-selecting
+        else:
+            alphas = np.full(n, self.alpha_on_deselect)
+            positions = self.ids_to_positions(self.id_selection)
+            alphas[positions] = self.alpha_on_select
+        self.plt_obj.set_alpha(alphas)
 
 
-from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.colors import LinearSegmentedColormap, Colormap
 from scipy.ndimage import filters
 
 class LickRasterView(View):
 
-    def __init__(self, licks, bins, metadata, ax):
+    def __init__(self, licks, bins, metadata, ax, color_from_metadata = True, starting_selection = 10):
         '''data should be a numpy array of licks of shape (trials, bins),
-        and must match the metadata length'''
+        and must match the metadata length.
+        starting_selection = -1 to plot all passed data, [id1, id2...] to start with a selection, or int to 
+        '''
         super().__init__(licks, metadata, ax)
         
         self.licks = licks
@@ -370,34 +555,95 @@ class LickRasterView(View):
         # self.plot_step = np.percentile(self.licks.ravel()[self.licks>0.1], 99)*1.1 << in case i decide to change per animal                                                                            
         self.plot_step = 2.75
         self.ax = ax
-        self.set_raster_colormap()
-        self.plot_raster( self.metadata['idx'].values[:10])
+        self.linked_cmap_dict = None
+        self.linked_cmap_obj = None
+        self.color_from_metadata = color_from_metadata
+        if color_from_metadata:
+            self.set_edge_colormap()
+            self.set_face_colormap()
+
+        if not (isinstance(starting_selection, list) or isinstance(starting_selection, np.ndarray)):
+            if starting_selection == -1:
+                self.id_selection =self.metadata['idx'].values
+                self.plot_raster( self.metadata['idx'].values)
+            else:
+                self.id_selection =self.metadata['idx'].values[:10]
+                self.plot_raster( self.metadata['idx'].values[:10])
+        else:
+                self.id_selection =self.metadata['idx'].values[starting_selection]
+                self.plot_raster( self.metadata['idx'].values[starting_selection])
         
         
         
+        
+    def link_colormaps(self, color_linker, link_face = False, link_edge = True):
+        '''expects to be able to access a dict with  "cmap" and "col" keys'''
+        
+
+        self.color_from_metadata = True
+        self.link_face = link_face
+        self.link_edge = link_edge
+
+        if link_face:
+            self.face_color_linker = color_linker
+            self.set_face_colormap(color_linker, color_linker.column_name)
+        if link_edge:
+            self.edge_color_linker = color_linker
+            self.set_edge_colormap(color_linker, color_linker.column_name)
     
-    def set_raster_colormap(self, cm = None):
+   
+
+    def set_face_colormap(self, cm = None, colorby = 'omit'):
         if cm is None:
             cm = LinearSegmentedColormap.from_list('MgK', ['black', 'magenta'])
         elif isinstance(cm, list):
             cm = LinearSegmentedColormap.from_list('custom', cm)
-        elif isinstance(cm, LinearSegmentedColormap):
+        elif isinstance(cm, ColorLinker):
             cm = cm
         else:
             raise TypeError('invalid CM type')
-
+        self.color_from_metadata = True
         self.colormap = cm
+        self.colorby = colorby
     
-    def update(self, ids, sel_meta, deselected, desel_meta):
-        self.ax.clear()
-        
-        # take in ids (meta['idx']), but call plot_raster with index for
-        # lick data passed in
-        self.id_selection = ids
-        self.plot_raster(self.ids_to_positions(ids))
 
-    def plot_raster(self, pos_ind):
-        # print(pos_ind)
+
+    def set_edge_colormap(self, edgecm = None, edge_colorby = None):
+        if edgecm is None:
+            edgecm = LinearSegmentedColormap.from_list('MgK', ['black', 'magenta'])
+        elif isinstance(edgecm, list):
+            edgecm = LinearSegmentedColormap.from_list('custom', edgecm)
+        elif isinstance(edgecm, ColorLinker):
+            edgecm = edgecm
+        else:
+            raise TypeError(f'invalid CM type: {edgecm}')
+        self.color_from_metadata = True
+        self.edgecm = edgecm
+        self.edge_colorby = edge_colorby
+    
+    def update(self, ids):
+        if len(ids) > 0:
+            self.ax.clear()
+            
+            # take in ids (meta['idx']), and call raster plot with IDs
+            # lick data passed in. first, get order of idxs in case the metadata df has
+            #been sorted (EG descending by day). 
+            self.id_selection = self.metadata.loc[self.metadata.idx.isin(ids), 'idx'].values
+        else:
+            print('uhh, empy list of IDs passed')
+
+        
+        self.plot_raster(self.id_selection)
+    
+    def update_linked_colors(self):
+        self.ax.clear()
+        self.plot_raster(self.id_selection)
+
+    def plot_raster(self, ids):
+        pos_ind = self.ids_to_positions(ids)
+
+        metadata_slicer = self.metadata.idx.isin(ids)
+
         if not self.smooth_sigma == None:
             licks = filters.gaussian_filter1d(self.licks, self.smooth_sigma, axis=1)
         
@@ -406,33 +652,97 @@ class LickRasterView(View):
         #slice out just the lick trials we need by index
         licks = licks[pos_ind]
 
-        #ill need to revist this in case I want to make it more flexible
-        vals = self.metadata.iloc[pos_ind]['omit'].values
-        vals = vals.astype(float)
-        rstarts = self.metadata.iloc[pos_ind]['reward_zone_start'].values
-        rends = self.metadata.iloc[pos_ind]['reward_zone_end'].values
+        if self.color_from_metadata:
+            face_vals = self.metadata.loc[metadata_slicer][self.colorby].values.astype(float)
 
+            if not self.edge_colorby is None:
+                self.edge_colorby = self.edgecm.column_name
+                edge_vals = self.metadata.loc[metadata_slicer][self.edge_colorby].values
+                print(edge_vals)
+
+
+            if 'reward_zone_start' in self.metadata.columns:
+                rstarts = self.metadata.loc[metadata_slicer]['reward_zone_start'].values
+                rends = self.metadata.loc[metadata_slicer]['reward_zone_end'].values
+
+        
+        y_pos_list = []
         for i, ind in enumerate(np.arange(0, licks.shape[0], 1)):
+            top_y = self.plot_step*licks.shape[0]
+            y_pos = top_y - i*self.plot_step
+            y_pos_list += [y_pos]
+            if self.color_from_metadata == False:
+                self.ax.fill_between(self.bins, licks[ind, :] + y_pos, y2=y_pos, 
+                                color='black', linewidth=.001)
+            
+            else:
 
-            y_pos = i*self.plot_step
-            # if vals is not None:
-            self.ax.fill_between(self.bins, licks[ind, :] + y_pos, y2=y_pos, 
-                                 color=self.colormap(vals[ind]), linewidth=.001)
+                if not self.edge_colorby is None:
+                    self.ax.fill_between(self.bins, licks[ind, :] + y_pos, y2=y_pos, 
+                                        color=self.colormap(face_vals[ind]), 
+                                        edgecolor = self.edgecm(edge_vals[ind]),
+                                                    linewidth=1)
+                else:
+                    self.ax.fill_between(self.bins, licks[ind, :] + y_pos, y2=y_pos, 
+                                    color=self.colormap(face_vals[ind]), linewidth=.001)
 
             # else:
             #     self.ax.fill_between(self.bins, licks[ind, :] + y_pos, y2=i*y_pos,
                                 # color='black', linewidth=.001)
                 
-            self.ax.set_ylabel(f"{self.metadata.iloc[ind]['day']}, {self.metadata.iloc[ind]['trial']}")
-            self.ax.fill_betweenx(y = [y_pos,y_pos+self.plot_step],
-                                  x1 = [rstarts[ind]], 
-                                  x2 =  [rends[ind]], color = 'red', alpha = 0.25)
+                self.ax.set_ylabel(f"{self.metadata.iloc[ind]['day']}, {self.metadata.iloc[ind]['trial']}")
+                self.ax.fill_betweenx(y = [y_pos,y_pos+self.plot_step],
+                                    x1 = [rstarts[ind]], 
+                                    x2 =  [rends[ind]], color = 'red', alpha = 0.25)
         
-        self.ax.set_yticks([i*self.plot_step for i in range(len(licks))])
-        self.ax.set_yticklabels([f"d: {row[0]}\nt: {row[1]}" for row in self.metadata.iloc[pos_ind][['day','trial']].values])
+        self.ax.set_yticks(y_pos_list)
+        if 'day' in self.metadata.columns and 'trial' in self.metadata.columns:
+                                                                                                                        
+            self.ax.set_yticklabels([f"(d, t): {row[0]}, {row[1]}" for row in self.metadata.loc[metadata_slicer][['day','trial']].values]) 
 
+class ColorLinker:
 
+    def __init__(self, column_name):
+        self.cmap = None
+        self.column_name = column_name
+        self.cmap_type = 'categorical'
 
+    def __call__(self, X):
+        '''take a val or list of vals and return colors'''
+        
+        return self.get_colors(X)
+
+    def get_colors(self, X:list|np.ndarray|int|float):
+        if np.ndim(X) == 0:
+            
+            if self.cmap_type == 'categorical':
+                return self.cmap[X] 
+            else:
+                return self.cmap(X)
+        
+        else:
+            if self.cmap_type == 'categorical':
+                return [self.cmap[k] for k in X]
+            else:
+                return [self.cmap(value) for value in X]
+
+    def set_categorical(self, mapping_dict, col_name):
+        self.cmap_type = 'categorical'
+        self.cmap = mapping_dict
+        self.column_name = col_name
+
+    def set_continuous(self, cmap , col_name):
+        '''pass a colormap right from a scatter plot, for example'''
+        self.cmap_type = 'continous'
+        self.cmap = cmap
+        self.column_name = col_name
+
+    def add_color(self, key, color):
+        '''add a single key/color combo'''
+        if self.cmap_type == 'categorical':
+            self.cmap[key] = color
+        else:
+            raise TypeError('cannot add a key/value color pair to a categorical color linker')
     
 
 class TrialPlotLinker:
@@ -501,7 +811,6 @@ class TrialPlotLinker:
     def update_views(self):
         sel, desel = sorted(self.selected), sorted(self.last_deselected)
         for v in self.views:
-            v.update(sel, self.metadata.iloc[sel],
-                     desel, self.metadata.iloc[desel])
+            v.update(sel)
 
     # ^^^^^^^^^
