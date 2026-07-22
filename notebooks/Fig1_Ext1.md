@@ -6,9 +6,9 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.13.4
+      jupytext_version: 1.16.5
   kernelspec:
-    display_name: Python 3
+    display_name: dope2p
     language: python
     name: python3
 ---
@@ -39,8 +39,10 @@ import reward_relative.behavior as behav
 from reward_relative import utilities as ut
 from reward_relative import plotUtils as pt
 from reward_relative import dayData as dd
-    
+
 import TwoPUtils
+
+import importlib #for reloading modules during development
 
 ## SET FIGURE PARAMETERS
 pt.set_fig_params(fontsize=12)
@@ -894,6 +896,10 @@ df
 ```
 
 ```python
+path_dict
+```
+
+```python
 fig = '1h'
 filepath = os.path.join(path_dict['preprocessed_root'],
                              'source_data',
@@ -903,8 +909,4 @@ filepath
 
 ```python
 ut.write_source_csv(df, '1h')
-```
-
-```python
-
 ```
