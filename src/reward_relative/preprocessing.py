@@ -12,9 +12,9 @@ import TwoPUtils.utilities as u
 from TwoPUtils.utilities import nansmooth
 
 from . import utilities as ut
-from suite2p.extraction import dcnv
+from . import dcnv
 
-def create_sess(basedir, scandir, vrdir, animal, date, scene, session, scan_number,
+def create_sess(basedir, scandir, vrdir, animal, date, rig, scene, session, scan_number,
                 load_scaninfo=True,
                 load_VR=True,
                 load_suite2p=False,
@@ -98,9 +98,19 @@ def create_sess(basedir, scandir, vrdir, animal, date, scene, session, scan_numb
         nplanes = 1
         VR_only = True
 
-    vr_file = os.path.join(vrdir, '%s/%s/%s_%d.sqlite' %
-                           (animal, date, scene, session))
+        fullpath = os.path.join(
+                        basedir, date, scene)
 
+
+    # if os.path.exists(os.path.join(vrdir, '%s/%s/%s_%d.sqlite' %
+    #                         (animal, date, scene, session))):
+    #     vr_file = os.path.join(vrdir, '%s/%s/%s_%d.sqlite' %
+    #                         (animal, date, scene, session))
+    # else:
+    vr_file = os.path.join(vrdir, '%s/%s/%s/%s_%d.sqlite' %
+                                    (animal, date, rig, scene, session))
+
+    print(vr_file)
     sess = TwoPUtils.sess.Session(**{
         'mouse': animal,
         'date': date,

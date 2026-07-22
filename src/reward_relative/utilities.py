@@ -9,13 +9,12 @@ from datetime import datetime
 
 from . import behavior as behav
 from . import preprocessing as pp
-from . import sessions_dict
 
-from reward_relative.sessions_dict import single_plane, multi_plane
+from reward_relative.sessions_dict_behavior_only import sosalab as all_sess
 from reward_relative.spatial import calc_place_cells
 
-all_sess = single_plane
-all_sess.update(multi_plane)
+# all_sess = single_plane
+# all_sess.update(multi_plane)
 
 # Set dff defaults for collecting sess data across animals
 default_dff_method = {

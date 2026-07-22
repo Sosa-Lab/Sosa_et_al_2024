@@ -358,6 +358,12 @@ def histogram(data, ax=None, bins=10, bin_range=None, plot=True, **kwargs):
 
     return norm_counts, bin_edges
 
+def hex_to_rgb_normalized(hex_str):
+    # Remove the '#' character if it is present
+    hex_str = hex_str.lstrip('#')
+    
+    # Convert hex to integer (0-255) and divide by 255.0 to get 0-1 range
+    return tuple(int(hex_str[i:i+2], 16) / 255.0 for i in (0, 2, 4))
 
 def color_def(experiment=None, exp_day=None, rz_label0='A', rz_label1=None, expand_dims=False):
     """
