@@ -131,6 +131,7 @@ def create_sess(basedir, scandir, vrdir, animal, date, rig, scene, session, scan
     append_session_data(sess,
                         scaninfo=load_scaninfo,
                         VR=load_VR,
+                        VR_only=VR_only,
                         suite2p=load_suite2p,
                         behavior=load_behavior,
                         sbx_version=sbx_version,
@@ -140,7 +141,7 @@ def create_sess(basedir, scandir, vrdir, animal, date, rig, scene, session, scan
 
 
 def append_session_data(sess, scaninfo=False, VR=False, suite2p=False, behavior=False,
-                        sbx_version=2,
+                        sbx_version=2, VR_only=False,
                         **trial_matrix_kwargs):
     """
     complete the session class with relevant data
@@ -161,22 +162,28 @@ def append_session_data(sess, scaninfo=False, VR=False, suite2p=False, behavior=
 
     if VR:
         sess.align_VR_to_2P()
+
+    if VR_only:
+        # add speed calculation
+        sess.vr_data['speed'] = np.array(np.divide(sess.vr_data['dz'], np.ediff1d(sess.vr_data['time'], 
+                                                                    to_begin=np.mean(np.ediff1d(sess.vr_data['time'])))))
+        sess.vr_data.iloc[0]['speed'] = 0
     print(sess.vr_data.shape)
 
     if suite2p:
         sess.load_suite2p_data()
 
     if behavior:
-        if suite2p:
-            sess.add_timeseries(licks=sess.vr_data['lick'],
-                                rewards=sess.vr_data['reward'],
-                                speed=sess.vr_data['speed'])
-            sess.add_pos_binned_trial_matrix(
-                ['speed'], 'pos', impute_nans=False, **trial_matrix_kwargs)
-        else:
-            # hack for now since we currently can't get speed without imaging frame times
-            sess.add_timeseries(licks=sess.vr_data['lick'],
-                                rewards=sess.vr_data['reward'])
+        # if suite2p:
+        sess.add_timeseries(licks=sess.vr_data['lick'],
+                            rewards=sess.vr_data['reward'],
+                            speed=sess.vr_data['speed'])
+        sess.add_pos_binned_trial_matrix(
+            ['speed'], 'pos', impute_nans=False, **trial_matrix_kwargs)
+        # else:
+        #     # hack for now since we currently can't get speed without imaging frame times
+        #     sess.add_timeseries(licks=sess.vr_data['lick'],
+        #                         rewards=sess.vr_data['reward'])
         # add behavior trial matrices
         sess.add_pos_binned_trial_matrix(
             ['licks', 'rewards'], 'pos', impute_nans=False, **trial_matrix_kwargs)
