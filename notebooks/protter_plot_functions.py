@@ -260,7 +260,7 @@ class ColorSelector:
         self.scatter = scatter
         self.meta = meta
         self.color_linker = ColorLinker(column_name='omit')
-        
+        self.additional_scatters = []
         self.cmap_continuous='viridis'
         self.cmap_categorical='tab10'
         self.after_recolor=[]
@@ -378,7 +378,140 @@ class ColorSelector:
         recolor(columns[0])
         return radio        # keep this reference alive — see note
 
+class ColorSelectorV2:
+    def __init__(self, scatter, meta, columns=None,
+                        cmap_continuous='viridis', cmap_categorical='tab10',
+                        after_recolor=None) -> None:
+        '''state-saving RadioSelector'''
 
+        self.scatters = [scatter]
+        self.meta = meta
+        self.color_linker = ColorLinker(column_name='omit')
+        
+        self.cmap_continuous='viridis'
+        self.cmap_categorical='tab10'
+        self.after_recolor=[]
+        
+        self.radio_obj = self.add_color_selector(scatter, meta, columns, cmap_continuous, cmap_categorical)
+        
+        
+    def add_additional_scatter_objects(self, plots):
+        self.scatters += plots
+
+    def add_after_recolor_call(self, func):
+        '''add a new func to run after recoloring/button press'''
+        self.after_recolor += [func]
+
+    def get_color_linker(self):
+        return self.color_linker
+    
+    #clade made this, too. worked without any changes using default values. 
+    def add_color_selector(self, scatter, meta, columns=None,
+                        cmap_continuous='viridis', cmap_categorical='tab10',
+                        ):
+        """Recolor a scatter by a chosen metadata column via on-figure radio buttons.
+        Assumes point order == meta row order (point i is row i)."""
+        ax  = self.scatters[0].axes
+        fig = ax.figure
+        columns = list(meta.columns) if columns is None else columns
+        state = {'cbar': None}
+
+        def set_positions_to_facecolor(plt_idx, color):
+            if isinstance(color, str):
+                color = to_rgba(color)
+            
+            cur_colors = self.scatters[0].get_facecolors()
+
+            if len(cur_colors) == 1 and len(meta)>1:
+                cur_colors = np.repeat(cur_colors, len(meta), axis = 0)
+
+            new_colors = cur_colors
+            print(plt_idx)
+            new_colors[plt_idx] = color
+            for scatter in self.scatters:
+                scatter.set_facecolors(new_colors)
+
+        def _clear_extras():
+            if state['cbar'] is not None:
+                state['cbar'].remove(); state['cbar'] = None
+            if ax.get_legend() is not None:
+                ax.get_legend().remove()
+
+        
+        def set_continuous_cmap(values, col):
+            v = np.asarray(values, float)
+            mappable = ScalarMappable(norm=Normalize(np.nanmin(v), np.nanmax(v)), cmap=cmap_continuous)
+            for scatter in self.scatters:
+                scatter.set_array(v)
+                
+                scatter.set_cmap(cmap_continuous) #just to track the name of the cmap
+                scatter.set_facecolors(mappable.to_rgba(v))
+            state['cbar'] = fig.colorbar(scatter,  ax=ax, label=col)
+            self.color_linker.set_continuous(mappable.to_rgba, col)
+            
+            
+        
+        def set_categorical_cmap(values, col):
+            codes, uniques = pd.factorize(values)
+            cmap = plt.get_cmap(cmap_categorical)
+            for scatter in self.scatters:
+                scatter.set_array(None)                   # detach the scalar mappable << what does this actually do?
+                scatter.set_facecolors(cmap(codes % cmap.N))
+            
+            categorical_cmap = {unique:cmap(i % cmap.N) for i, unique in enumerate(uniques)} #keep this to pass to other plot objects
+           
+
+            handles = [Line2D([], [], marker='o', ls='', color=cmap(i % cmap.N),
+                            label=str(u)) for i, u in enumerate(uniques) if not u == -1]
+
+            if any(values == -1):
+                categorical_cmap[-1] = (0, 0, 0, 1)
+                set_positions_to_facecolor(np.where(values == -1)[0], 'black')
+                handles = [Line2D([], [], marker='o', ls='', color='black',
+                            label=str(-1))] + handles
+
+            self.color_linker.set_categorical(categorical_cmap, col)
+
+            for scatter in self.scatters:
+                ax = scatter.axes
+                ax.legend(handles=handles, title=col, fontsize=8,
+                        loc='upper right', bbox_to_anchor=(-0.02, 1))
+
+        def guess_is_continuous(values):
+            numeric = (pd.api.types.is_numeric_dtype(values)
+                        and not pd.api.types.is_bool_dtype(values))
+            if not numeric:
+                return False
+            elif pd.api.types.is_integer_dtype(values) and len(np.unique(values)) / len(values) < 0.5:
+        
+                return False
+            else:
+                return True
+            
+        
+        
+        def recolor(col):
+            _clear_extras()
+            values = meta[col]
+
+            
+            continous = guess_is_continuous(values)
+            if continous:                                   # continuous -> colormap
+                set_continuous_cmap(values, col)
+            else:                                         # categorical/bool -> discrete
+                set_categorical_cmap(values, col)
+            for func in self.after_recolor:                                                            # << not implemented
+                func()                        # e.g. re-stamp selection alpha  << not implemented
+            fig.canvas.draw_idle()
+
+        fig.subplots_adjust(left=0.28)                    # make room on the left
+        rax = fig.add_axes([0.1, 0.5, 0.1, 0.3])        # [left, bottom, w, h], fig coords
+        rax.set_title('color by', fontsize=9)
+        radio = RadioButtons(rax, columns)
+        radio.on_clicked(recolor)
+
+        recolor(columns[0])
+        return radio   
 class View:
     ''''''
     def __init__(self, data, metadata, plt_obj, sort_dict: dict = {'idx':'ascending'}):
@@ -690,10 +823,33 @@ class LickRasterView(View):
             #     self.ax.fill_between(self.bins, licks[ind, :] + y_pos, y2=i*y_pos,
                                 # color='black', linewidth=.001)
                 
-                self.ax.set_ylabel(f"{self.metadata.iloc[ind]['day']}, {self.metadata.iloc[ind]['trial']}")
+                self.ax.set_ylabel(f"{self.metadata[metadata_slicer].iloc[ind]['day']}, {self.metadata[metadata_slicer].iloc[ind]['trial']}")
                 self.ax.fill_betweenx(y = [y_pos,y_pos+self.plot_step],
                                     x1 = [rstarts[ind]], 
                                     x2 =  [rends[ind]], color = 'red', alpha = 0.25)
+                
+                if 'swap_zone_start' in self.metadata.columns:
+                    sr_st = self.metadata[metadata_slicer].iloc[ind]['swap_zone_start']
+                    sr_en = self.metadata[metadata_slicer].iloc[ind]['swap_zone_end']
+
+                    if self.metadata[metadata_slicer].iloc[ind]['trial_type'] == 'post_swap':
+                        color = 'orange'
+                        self.ax.fill_betweenx(y = [y_pos,y_pos+self.plot_step],
+                                    x1 = [sr_st], 
+                                    x2 =  [sr_en], color = color, alpha = 0.25)
+                    else:
+                        color = 'gray'
+                        self.ax.fill_betweenx(y = [y_pos,y_pos+self.plot_step],
+                                    x1 = [sr_st], 
+                                    x2 =  [sr_en], color = color, alpha = 0.25)
+
+                    handles = [Line2D([], [], marker='o', ls='', color='orange',
+                            label='past_rzone'),
+                            Line2D([], [], marker='o', ls='', color='gray',
+                            label='future_rzone')]
+                    self.ax.legend(handles= handles, bbox_to_anchor = (0.8,0.9))
+                    
+
         
         self.ax.set_yticks(y_pos_list)
         if 'day' in self.metadata.columns and 'trial' in self.metadata.columns:

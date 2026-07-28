@@ -28,6 +28,7 @@ class TrialInfo:
         for day, session in self.session_dict.items():
 
             rzones = behavior.get_reward_zones(session)[0]
+            swap_zones = np.zeros((len(rzones), 2))
             omit_trials = ra.get_omission_trials(session)['trials']
             omit = np.zeros(shape = (len(rzones)), dtype = bool)
             omit[omit_trials] = True
@@ -49,6 +50,10 @@ class TrialInfo:
             if 'swap' in type_swap:
                 trial_type = ['pre_swap']*sum(rzones[:,0]==rzones[0,0]) 
                 trial_type += ['post_swap']*sum(rzones[:,0]==rzones[-1,0])
+
+                swap_zones[rzones[:,0] == rzones[0,0],:] = rzones[-1,:]
+                swap_zones[rzones[:,0] == rzones[-1,0],:] = rzones[0,:]
+
             else:
                 trial_type = ['stay']*len(rzones)
 
@@ -58,6 +63,8 @@ class TrialInfo:
                                             'trial' :  np.arange(0, len(rzones), 1), 
                                             'reward_zone_start': rzones[:,0], 
                                             'reward_zone_end': rzones[:,1],
+                                            'swap_zone_start':swap_zones[:,0],
+                                            'swap_zone_end':swap_zones[:,1],
                                             'trial_type':trial_type,
                                             'swap_type':type_swap, 
                                             'omit':omit} ))
@@ -67,6 +74,7 @@ class TrialInfo:
     
     def add_session(self, day, session):
         rzones = behavior.get_reward_zones(session)[0]
+        swap_zones = np.zeros((len(rzones), 2))
         omit_trials = ra.get_omission_trials(session)['trials']
         omit = np.zeros(shape = (len(rzones)), dtype = bool)
         omit[omit_trials] = True
@@ -85,6 +93,9 @@ class TrialInfo:
         if 'swap' in type_swap:
             trial_type = ['pre_swap']*sum(rzones[:,0]==rzones[0,0]) 
             trial_type += ['post_swap']*sum(rzones[:,0]==rzones[-1,0])
+
+            swap_zones[rzones[:,0] == rzones[0,0],:] = rzones[-1,:]
+            swap_zones[rzones[:,0] == rzones[-1,0],:] = rzones[0,:]
         else:
             trial_type = ['stay']*len(rzones)
 
@@ -94,6 +105,8 @@ class TrialInfo:
                                         'trial' :  np.arange(0, len(rzones), 1), 
                                         'reward_zone_start': rzones[:,0], 
                                         'reward_zone_end': rzones[:,1],
+                                        'swap_zone_start':swap_zones[:,0],
+                                        'swap_zone_end':swap_zones[:,1],
                                         'trial_type':trial_type,
                                         'swap_type':type_swap, 
                                         'omit':omit} )])
