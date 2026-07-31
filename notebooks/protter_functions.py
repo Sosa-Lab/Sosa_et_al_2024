@@ -119,7 +119,7 @@ def correct_licks(session, correction_thr = 0.3):
     # get rid of trials where lick sensor may have gotten stuck on
     licks = np.copy(session.vr_data['lick'].values)
     licks, error_count = behavior.correct_lick_sensor_error(
-        licks, session.trial_start_inds, session.teleport_inds, correction_thr=0.3)
+        licks, session.trial_start_inds, session.teleport_inds, correction_thr=correction_thr)
     
     licks_mat = spatial_analyses.trial_matrix(licks, 
                                             session.vr_data['pos']._values, 
@@ -176,4 +176,4 @@ def correlate_two_pop_vectors(pv1, pv2, pv1_name, pv2_name):
     corr_names    --> list'''
     corr_mat = np.corrcoef(pv1, pv2)
 
-    return [corr_mat[:450,:450],  corr_mat[450:, 450:], corr_mat[0:450, 450:],], [f'{pv1_name}', f'{pv2_name}', f'{pv1_name}_v_{pv2_name}']
+    return [corr_mat[:len(pv1),:len(pv1)],  corr_mat[len(pv1):, len(pv1):], corr_mat[0:len(pv1), len(pv1):],], [f'{pv1_name}', f'{pv2_name}', f'{pv1_name}_v_{pv2_name}']
