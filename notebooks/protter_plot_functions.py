@@ -6,7 +6,12 @@ from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
 
+def add_default_rzone_lines_to_matshow(ax, color = 'white', alpha = 0.5):
+    for loc in [80, 200, 320]:
+        ax.vlines(x = [loc], ymin=0, ymax=449, color = color, alpha = alpha, linestyles= '--')
+        ax.hlines(y = [loc], xmin = 0, xmax = 449, color = color, alpha = alpha,  linestyles= '--')
 
 def add_hover( scatter, meta, columns=None, ax=None):
     """Show metadata in a tooltip when hovering scatter points.
@@ -58,101 +63,15 @@ def add_hover( scatter, meta, columns=None, ax=None):
 
     return fig.canvas.mpl_connect("motion_notify_event", on_move)
 
+def plot_raster_from_licks( data, metadata_df, ax, bin_centers = np.arange(5,455,10), starting_selection = -1, 
+                           colorby = None, cmap = None,
+                           edge_colorby = None, edgecm = None):
 
-# #clade made this, too. worked without any changes using default values. 
-# def add_color_selector(scatter, meta, columns=None,
-#                        cmap_continuous='viridis', cmap_categorical='tab10',
-#                        after_recolor=None):
-#     """Recolor a scatter by a chosen metadata column via on-figure radio buttons.
-#     Assumes point order == meta row order (point i is row i)."""
-#     ax  = scatter.axes
-#     fig = ax.figure
-#     columns = list(meta.columns) if columns is None else columns
-#     state = {'cbar': None}
+    v = LickRasterView(data, bin_centers, metadata_df, ax, starting_selection = starting_selection, 
+                       colorby=colorby, cmap = cmap,
+                           edge_colorby = edge_colorby, edgecm = edgecm)
+    return v
 
-#     def set_positions_to_facecolor(plt_idx, color):
-#         if isinstance(color, str):
-#             color = to_rgba(color)
-        
-#         cur_colors = scatter.get_facecolors()
-
-#         if len(cur_colors) == 1 and len(meta)>1:
-#             cur_colors = np.repeat(cur_colors, len(meta), axis = 0)
-
-#         new_colors = cur_colors
-#         print(plt_idx)
-#         new_colors[plt_idx] = color
-#         scatter.set_facecolors(new_colors)
-
-#     def _clear_extras():
-#         if state['cbar'] is not None:
-#             state['cbar'].remove(); state['cbar'] = None
-#         if ax.get_legend() is not None:
-#             ax.get_legend().remove()
-
-    
-#     def set_continuous_cmap(values, col):
-#         v = np.asarray(values, float)
-#         scatter.set_array(v)
-#         scatter.set_cmap(cmap_continuous)
-#         scatter.set_norm(Normalize(np.nanmin(v), np.nanmax(v)))
-#         state['cbar'] = fig.colorbar(scatter,  ax=ax, label=col)
-    
-#     def set_categorical_cmap(values, col):
-#         codes, uniques = pd.factorize(values)
-#         cmap = plt.get_cmap(cmap_categorical)
-#         scatter.set_array(None)                   # detach the scalar mappable << what does this actually do?
-#         scatter.set_facecolors(cmap(codes % cmap.N))
-        
-#         handles = [Line2D([], [], marker='o', ls='', color=cmap(i % cmap.N),
-#                         label=str(u)) for i, u in enumerate(uniques) if not u == -1]
-
-#         if any(values == -1):
-#             set_positions_to_facecolor(np.where(values == -1)[0], 'black')
-#             handles = [Line2D([], [], marker='o', ls='', color='black',
-#                         label=str(-1))] + handles
-
-        
-        
-        
-#         ax.legend(handles=handles, title=col, fontsize=8,
-#                 loc='upper right', bbox_to_anchor=(-0.02, 1))
-
-#     def guess_is_continuous(values):
-#         numeric = (pd.api.types.is_numeric_dtype(values)
-#                     and not pd.api.types.is_bool_dtype(values))
-#         if not numeric:
-#             return False
-#         elif pd.api.types.is_integer_dtype(values) and len(np.unique(values)) / len(values) < 0.5:
-    
-#             return False
-#         else:
-#             return True
-        
-    
-    
-#     def recolor(col):
-#         _clear_extras()
-#         values = meta[col]
-
-        
-#         continous = guess_is_continuous(values)
-#         if continous:                                   # continuous -> colormap
-#             set_continuous_cmap(values, col)
-#         else:                                         # categorical/bool -> discrete
-#             set_categorical_cmap(values, col)
-#         if after_recolor:                                                            # << not implemented
-#             after_recolor(col)                        # e.g. re-stamp selection alpha  << not implemented
-#         fig.canvas.draw_idle()
-
-#     fig.subplots_adjust(left=0.28)                    # make room on the left
-#     rax = fig.add_axes([0.1, 0.5, 0.1, 0.3])        # [left, bottom, w, h], fig coords
-#     rax.set_title('color by', fontsize=9)
-#     radio = RadioButtons(rax, columns)
-#     radio.on_clicked(recolor)
-
-#     recolor(columns[0])
-#     return radio        # keep this reference alive — see note
 
 #clade made this, too. worked without any changes using default values. 
 def add_color_selector(scatter, meta, columns=None,
@@ -396,6 +315,8 @@ class ColorSelectorV2:
         
         
     def add_additional_scatter_objects(self, plots):
+        '''need to check if plots have the same shape, or else funny stuff can happen'''
+
         self.scatters += plots
 
     def add_after_recolor_call(self, func):
@@ -512,6 +433,8 @@ class ColorSelectorV2:
 
         recolor(columns[0])
         return radio   
+
+    
 class View:
     ''''''
     def __init__(self, data, metadata, plt_obj, sort_dict: dict = {'idx':'ascending'}):
@@ -586,6 +509,7 @@ class ScatterView(View):
         self.meta = meta
         self.update_color = color_on_select
         self.reveal = False #hold this flag to recolor deselected points temporarily
+        self.cmap = None
         self._connect_reveal()
         
 
@@ -606,13 +530,50 @@ class ScatterView(View):
         """Store the current selection and draw it (respecting the reveal toggle)."""
 
         if len(selected_ids) > 0:
-            self.id_selection = np.asarray(selected_ids, dtype=int)
+            self.id_selection = np.asarray(selected_ids)
             self._render_alpha()
             if self.update_color is not None:
                 self.set_trial_ids_to_facecolor(self.id_selection, self.update_color)
             self.plt_obj.figure.canvas.draw_idle()
         else:
             print('uhh, empty list of IDs passed...')
+
+
+    # def link_colormaps(self, color_linker, link_face = False, link_edge = True):
+    #         '''expects to be able to access a dict with  "cmap" and "col" keys'''
+    #         self.color_from_metadata = True
+    #         self.link_face = link_face
+    #         self.link_edge = link_edge
+    
+    #         if link_face:
+    #             self.face_color_linker = color_linker
+    #             self.set_face_colormap_from_linker(color_linker, color_linker.column_name)
+    #         if link_edge:
+    #             self.edge_color_linker = color_linker
+    #             self.set_edge_colormap_from_linker(color_linker, color_linker.column_name)
+
+    # def set_face_colormap_from_linker(self, cm, colorby):
+    #     if cm is None:
+    #         cm = sns.color_palette("flare", as_cmap=True)
+    #     elif isinstance(cm, list):
+    #         cm = LinearSegmentedColormap.from_list('custom', cm)
+    #     elif isinstance(cm, ColorLinker):
+    #         cm = cm
+        
+    #     self.cmap = cm
+    #     self.colorby = colorby
+
+    
+    # def set_edge_colormap_from_linker(self, cm, colorby):
+    #         if cm is None:
+    #             cm = sns.color_palette("flare", as_cmap=True)
+    #         elif isinstance(cm, list):
+    #             cm = LinearSegmentedColormap.from_list('custom', cm)
+    #         elif isinstance(cm, ColorLinker):
+    #             cm = cm
+            
+    #         self.edgecm = cm
+    #         self.edge_colorby = colorby
 
     def set_trial_ids_to_facecolor(self, ids, color):
         if isinstance(color, str):
@@ -627,6 +588,7 @@ class ScatterView(View):
         plt_idx = self.ids_to_positions(ids)
         new_colors[plt_idx] = color
         self.plt_obj.set_facecolors(new_colors)
+
     
 
     
@@ -675,7 +637,9 @@ from scipy.ndimage import filters
 
 class LickRasterView(View):
 
-    def __init__(self, licks, bins, metadata, ax, color_from_metadata = True, starting_selection = 10):
+    def __init__(self, licks, bins, metadata, ax, color_from_metadata = True, starting_selection = 10, 
+                 colorby = None, cmap = None,
+                 edge_colorby = None, edgecm = None):
         '''data should be a numpy array of licks of shape (trials, bins),
         and must match the metadata length.
         starting_selection = -1 to plot all passed data, [id1, id2...] to start with a selection, or int to 
@@ -688,23 +652,28 @@ class LickRasterView(View):
         # self.plot_step = np.percentile(self.licks.ravel()[self.licks>0.1], 99)*1.1 << in case i decide to change per animal                                                                            
         self.plot_step = 2.75
         self.ax = ax
+
         self.linked_cmap_dict = None
         self.linked_cmap_obj = None
         self.color_from_metadata = color_from_metadata
-        if color_from_metadata:
-            self.set_edge_colormap()
-            self.set_face_colormap()
+        if color_from_metadata or not colorby is None or not edge_colorby is None:
+            self.set_edge_colormap(edgecm = edgecm, edge_colorby=edge_colorby)
+            self.set_face_colormap(cm = cmap, colorby=colorby)
 
         if not (isinstance(starting_selection, list) or isinstance(starting_selection, np.ndarray)):
             if starting_selection == -1:
                 self.id_selection =self.metadata['idx'].values
                 self.plot_raster( self.metadata['idx'].values)
+            elif isinstance(starting_selection, int):
+                self.id_selection =self.metadata['idx'].values[:starting_selection]
+                self.plot_raster( self.metadata['idx'].values[:starting_selection])
+
             else:
                 self.id_selection =self.metadata['idx'].values[:10]
                 self.plot_raster( self.metadata['idx'].values[:10])
         else:
-                self.id_selection =self.metadata['idx'].values[starting_selection]
-                self.plot_raster( self.metadata['idx'].values[starting_selection])
+                self.id_selection = starting_selection
+                self.plot_raster( self.id_selection)
         
         
         
@@ -726,12 +695,17 @@ class LickRasterView(View):
     
    
 
-    def set_face_colormap(self, cm = None, colorby = 'omit'):
+    def set_face_colormap(self, cm = None, colorby = None):
+        colorby = colorby if not colorby is None else 'omit'
         if cm is None:
             cm = LinearSegmentedColormap.from_list('MgK', ['black', 'magenta'])
-        elif isinstance(cm, list):
+            cm.__setattr__('column_name', colorby)
+        elif isinstance(cm, list) or isinstance(cm, np.ndarray):
             cm = LinearSegmentedColormap.from_list('custom', cm)
+            cm.__setattr__('column_name', colorby)
         elif isinstance(cm, ColorLinker):
+            cm = cm
+        elif isinstance(cm, Colormap):
             cm = cm
         else:
             raise TypeError('invalid CM type')
@@ -742,10 +716,14 @@ class LickRasterView(View):
 
 
     def set_edge_colormap(self, edgecm = None, edge_colorby = None):
+        edge_colorby = edge_colorby if not edge_colorby is None else 'omit'
+
         if edgecm is None:
             edgecm = LinearSegmentedColormap.from_list('MgK', ['black', 'magenta'])
-        elif isinstance(edgecm, list):
+            edgecm.__setattr__('column_name', edge_colorby)
+        elif isinstance(edgecm, list) or isinstance(edgecm, np.ndarray):
             edgecm = LinearSegmentedColormap.from_list('custom', edgecm)
+            edgecm.__setattr__('column_name', edge_colorby)
         elif isinstance(edgecm, ColorLinker):
             edgecm = edgecm
         else:
@@ -754,7 +732,9 @@ class LickRasterView(View):
         self.edgecm = edgecm
         self.edge_colorby = edge_colorby
     
-    def update(self, ids):
+    def update(self, ids = None):
+        if ids is None:
+            ids = self.id_selection
         if len(ids) > 0:
             self.ax.clear()
             
@@ -788,10 +768,11 @@ class LickRasterView(View):
         if self.color_from_metadata:
             face_vals = self.metadata.loc[metadata_slicer][self.colorby].values.astype(float)
 
-            if not self.edge_colorby is None:
-                self.edge_colorby = self.edgecm.column_name
-                edge_vals = self.metadata.loc[metadata_slicer][self.edge_colorby].values
-                print(edge_vals)
+            if not self.edgecm is None:
+                if isinstance(self.edgecm, ColorLinker):
+                    self.edge_colorby = self.edgecm.column_name
+                self.edge_vals = self.metadata.loc[metadata_slicer][self.edge_colorby].values
+
 
 
             if 'reward_zone_start' in self.metadata.columns:
@@ -813,17 +794,15 @@ class LickRasterView(View):
                 if not self.edge_colorby is None:
                     self.ax.fill_between(self.bins, licks[ind, :] + y_pos, y2=y_pos, 
                                         color=self.colormap(face_vals[ind]), 
-                                        edgecolor = self.edgecm(edge_vals[ind]),
+                                        edgecolor = self.edgecm(self.edge_vals[ind]),
                                                     linewidth=1)
                 else:
+                    
                     self.ax.fill_between(self.bins, licks[ind, :] + y_pos, y2=y_pos, 
                                     color=self.colormap(face_vals[ind]), linewidth=.001)
 
-            # else:
-            #     self.ax.fill_between(self.bins, licks[ind, :] + y_pos, y2=i*y_pos,
-                                # color='black', linewidth=.001)
-                
-                self.ax.set_ylabel(f"{self.metadata[metadata_slicer].iloc[ind]['day']}, {self.metadata[metadata_slicer].iloc[ind]['trial']}")
+
+                #shaded reward zone
                 self.ax.fill_betweenx(y = [y_pos,y_pos+self.plot_step],
                                     x1 = [rstarts[ind]], 
                                     x2 =  [rends[ind]], color = 'red', alpha = 0.25)
@@ -854,7 +833,7 @@ class LickRasterView(View):
         self.ax.set_yticks(y_pos_list)
         if 'day' in self.metadata.columns and 'trial' in self.metadata.columns:
                                                                                                                         
-            self.ax.set_yticklabels([f"(d, t): {row[0]}, {row[1]}" for row in self.metadata.loc[metadata_slicer][['day','trial']].values]) 
+            self.ax.set_yticklabels([f"{row[1]}" for row in self.metadata.loc[metadata_slicer][['day','trial']].values]) 
 
 class ColorLinker:
 
