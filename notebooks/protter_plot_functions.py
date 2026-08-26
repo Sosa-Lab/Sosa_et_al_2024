@@ -1,5 +1,6 @@
 from matplotlib.widgets import RadioButtons
 from matplotlib.colors import Normalize, to_rgba
+import matplotlib.colors as mpcol
 from matplotlib.cm import ScalarMappable
 
 from matplotlib.lines import Line2D
@@ -7,6 +8,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+
+def trial_df_to_position_df(df, bin_centers):
+    expanded = df.loc[df.index.repeat(len(bin_centers))]
+    expanded["position"] = np.tile(bin_centers, len(df))
+    return expanded
 
 def add_default_rzone_lines_to_matshow(ax, color = 'white', alpha = 0.5):
     for loc in [80, 200, 320]:
@@ -62,6 +68,10 @@ def add_hover( scatter, meta, columns=None, ax=None):
             fig.canvas.draw_idle()
 
     return fig.canvas.mpl_connect("motion_notify_event", on_move)
+
+def add_default_shaded_rzones(ax, rzone_indices =[0,1,2]):
+    for xmin, xmax in zip(np.asarray([80,200,320])[rzone_indices], np.asarray([130, 250, 370])[rzone_indices]):
+        ax.axvspan(xmin=xmin, xmax = xmax, color = 'red', alpha = 0.4)
 
 def plot_raster_from_licks( data, metadata_df, ax, bin_centers = np.arange(5,455,10), starting_selection = -1, 
                            colorby = None, cmap = None,
@@ -949,3 +959,10 @@ class TrialPlotLinker:
             v.update(sel)
 
     # ^^^^^^^^^
+
+def bool_list_to_color(mask, c_true, c_false):
+
+
+    #                           just need to add an axis here
+    mask = np.asarray(mask)
+    return np.where(np.asarray(mask[:,np.newaxis], dtype=bool), mpcol.to_rgba( c_true), mpcol.to_rgba( c_false))

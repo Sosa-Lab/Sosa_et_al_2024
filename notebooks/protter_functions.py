@@ -151,30 +151,65 @@ def recreate_trial_meta_df(hdf5_group):
             data_dict[k] = np.asarray([v.decode() for v in vals])
     return pd.DataFrame.from_dict(data_dict)
 
+def generate_features_from_zone_list(licks, bin_centers, zone_objects, norm = False):
+    '''take a list of zone objects and create features'''
+    n_licks = licks.sum(axis = 1)
+    features = {'n_licks':n_licks}
+    features['start'] = get_licks_at_location(licks, [0, 30], bin_centers)['licks'].sum(axis = 1)
+    features['end'] = get_licks_at_location(licks, [400, 450], bin_centers)['licks'].sum(axis = 1)
+    for zone in zone_objects:
+        features.update(get_licks_from_zone_object(licks, zone, bin_centers, include_name = True))
+
+    features_df = pd.DataFrame.from_dict(features)
+    if norm:
+        features_df = features_df/n_licks[:,np.newaxis]
+        features_df['n_licks'] = n_licks
+    
+    return features_df
+
+
+
+
 def generate_cross_day_features(licks, meta, bin_centers, norm = False, reward_relative = True):
     '''if multiple days are passed, this could potentially reorder your df and licks, so both are passed back in the order
     they get modified'''
-    days = meta.day.unique()
-    day_slicer = meta.day == days[0]
-    day_slice = meta.loc[day_slicer]
-    day_zone_obj = DayZones(day_slice)
-    features = generate_zone_lick_features_from_class(licks[day_slicer], day_zone_obj, bin_centers, norm = norm, 
-                                                      reward_relative=reward_relative)
-    sorted_meta = day_slice.copy()
-    sorted_licks = licks[day_slicer]
-    if len(days) > 1:
-        for day in days[1:]:
-            day_slicer = meta.day == day
+    dfs = []
+    features = []
+    data = []
+    for animal in meta.animal.unique():
+        ani_slice = meta.loc[meta.animal == animal]
+
+        days = ani_slice.day.unique()
+        # day_slicer = ani_slice.day == days[0]
+        # day_slice = ani_slice.loc[day_slicer]
+        # day_zone_obj = DayZones(day_slice)
+        # feats = generate_zone_lick_features_from_class(licks[day_slicer], day_zone_obj, bin_centers, norm = norm, 
+        #                                                 reward_relative=reward_relative)
+        # features += [features]
+        # dfs +=[ day_slice.copy()]
+        # data+= [licks[day_slicer]]
+
+       
+        for day in days:
+            day_slicer = (meta.day == day) & (meta.animal == animal)
+
             day_slice = meta.loc[day_slicer]
+            day_licks = licks[day_slicer]
+
             day_zone_obj = DayZones(day_slice, post_zone_distance=15)
-            feat_day = generate_zone_lick_features_from_class(licks[day_slicer], 
-                                                              day_zone_obj, 
-                                                              bin_centers, norm = norm,
-                                                              reward_relative=reward_relative)
-            features = pd.concat([features, feat_day])
-            sorted_meta = pd.concat([sorted_meta, day_slice])
-            sorted_licks = np.concatenate([sorted_licks, licks[day_slicer]])
-    
+
+            day_feats = generate_zone_lick_features_from_class(day_licks, 
+                                                            day_zone_obj, 
+                                                            bin_centers, norm = norm,
+                                                            reward_relative=reward_relative)
+
+            features += [day_feats]
+            dfs +=[ day_slice.copy()]
+            data+= [day_licks]
+    features = pd.concat(features)
+    sorted_meta = pd.concat(dfs)
+    sorted_licks = np.concatenate(data)
+
     return features, sorted_meta, sorted_licks
 
 
@@ -245,6 +280,19 @@ class Zone:
 
 rzone_start_to_name = {80:'A', 200:'B', 320:'C'}
 rzone_dict = {'A':[80, 130], 'B':[200, 250], 'C':[320, 370]}
+
+
+default_zones = [Zone(name = k,
+                             start = v[0],
+                             end = v[1],
+                             anticipatory_distance = 50, 
+                             post_zone_distance = 15)
+
+                for k,v in rzone_dict.items()
+                
+
+                ]
+
 class DayZones:
 
 
@@ -280,10 +328,18 @@ class DayZones:
                                 post_zone_distance = post_zone_distance)
 
 
-def get_licks_from_zone_object(licks, zone_object, bin_centers):
-    return {'at_zone':get_licks_at_location(licks, zone_object.rzone, bin_centers)['licks'].sum(axis = 1),
-            'anticipatory_zone':get_licks_at_location(licks, zone_object.anticipatory_zone, bin_centers)['licks'].sum(axis = 1),
-            'after_zone':get_licks_at_location(licks, zone_object.after_zone, bin_centers)['licks'].sum(axis = 1),}
+def get_licks_from_zone_object(licks, zone_object, bin_centers, include_name = False):
+
+    if include_name:
+        name = zone_object.name
+    else:
+        name = ''
+    
+    
+    return {f'{name}_at_zone':get_licks_at_location(licks, zone_object.rzone, bin_centers)['licks'].sum(axis = 1),
+            f'{name}_anticipatory_zone':get_licks_at_location(licks, zone_object.anticipatory_zone, bin_centers)['licks'].sum(axis = 1),
+            f'{name}_after_zone':get_licks_at_location(licks, zone_object.after_zone, bin_centers)['licks'].sum(axis = 1),}
+
 
 
 def generate_zone_lick_features_from_class(licks, day_zone_obj, bin_centers, norm = False, reward_relative = True):
